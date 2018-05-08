@@ -1,2 +1,2 @@
 # Jacob
-A lightweight library to provide the feature of co routine in Java
+A lightweight library to provide coroutine in Java
