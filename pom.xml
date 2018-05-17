@@ -21,6 +21,11 @@
 				<artifactId>asm-tree</artifactId>
 				<version>6.0</version>
 			</dependency>
+			<dependency>
+				<groupId>org.ow2.asm</groupId>
+				<artifactId>asm-analysis</artifactId>
+				<version>6.0</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 </project>

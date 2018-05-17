@@ -2,7 +2,6 @@ package com.guujiang.jacob.samples;
 
 import static com.guujiang.jacob.Stub.yield;
 
-import java.util.Iterator;
 import java.util.function.Predicate;
 
 import com.guujiang.jacob.annotation.Generator;
@@ -31,16 +30,13 @@ public class BasicExample {
 			b = c;
 		}
 	}
-	
-	// with the coroutine syntax, many functional method can by implemented in a straightforward way
-	
+
+	// with the coroutine syntax, many functional method can by implemented in a
+	// straightforward way
+
 	@GeneratorMethod
 	public <T> Iterable<T> filter(Iterable<T> source, Predicate<T> predicate) {
-		// A issue occurs with the for-loop syntax that will be fixed in next version
-		// for now just use the old school iterator syntax
-		Iterator<T> iter = source.iterator();
-		while (iter.hasNext()) {
-			T val = iter.next();
+		for (T val : source) {
 			if (val != null && predicate.test(val)) {
 				yield(val);
 			}
@@ -50,21 +46,22 @@ public class BasicExample {
 
 	@GeneratorMethod
 	public <T> Iterable<T> take(Iterable<T> source, int n) {
-		Iterator<T> iter = source.iterator();
-		int i = 0;
-		while (iter.hasNext() && (i < n)) {
-			yield(iter.next());
-			++i;
+		int count = 0;
+		for (T val : source) {
+			if (count++ >= n) {
+				break;
+			}
+			yield(val);
 		}
 		return null;
 	}
 
 	public static void main(String[] args) {
 		BasicExample ex = new BasicExample();
-		
+
 		// the generator method can accept arguments.
 		ex.range(5, 10).forEach(System.out::println);
-		
+
 		System.out.println("the first 10 even numbers in the fibonacci series: ");
 		ex.take(ex.filter(ex.infiniteFib(), x -> x % 2 == 0), 10).forEach(System.out::println);
 	}

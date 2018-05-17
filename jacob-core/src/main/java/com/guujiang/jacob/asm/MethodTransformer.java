@@ -16,6 +16,7 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
 
 public class MethodTransformer {
 
@@ -29,7 +30,7 @@ public class MethodTransformer {
 		this.methodNode = methodNode;
 	}
 
-	public void transform() {
+	public void transform() throws AnalyzerException {
 		loadClass(new IteratorGenerator(outerClassNode, methodNode).generate());
 		loadClass(new IterableGenerator(outerClassNode, methodNode).generate());
 

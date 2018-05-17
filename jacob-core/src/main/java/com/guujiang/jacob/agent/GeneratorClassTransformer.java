@@ -9,6 +9,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.analysis.AnalyzerException;
 
 import com.guujiang.jacob.asm.MethodTransformer;
 
@@ -29,11 +30,16 @@ public class GeneratorClassTransformer implements ClassFileTransformer {
 		}
 
 		boolean transformed = false;
-		for (MethodNode method : clsNode.methods) {
-			if (checkMethod(method)) {
-				new MethodTransformer(loader, clsNode, method).transform();
-				transformed = true;
+		
+		try {
+			for (MethodNode method : clsNode.methods) {
+				if (checkMethod(method)) {
+					new MethodTransformer(loader, clsNode, method).transform();
+					transformed = true;
+				}
 			}
+		} catch (AnalyzerException e) {
+			return classfileBuffer;
 		}
 
 		if (transformed) {
