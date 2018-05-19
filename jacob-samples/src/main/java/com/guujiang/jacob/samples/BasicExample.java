@@ -11,7 +11,7 @@ import com.guujiang.jacob.annotation.GeneratorMethod;
 public class BasicExample {
 
 	@GeneratorMethod
-	public Iterable<Integer> range(int start, int end) {
+	public static Iterable<Integer> range(int start, int end) {
 		for (int i = start; i < end; ++i) {
 			yield(i);
 		}
@@ -20,7 +20,7 @@ public class BasicExample {
 
 	// the generator method can be infinite, just consume as need.
 	@GeneratorMethod
-	public Iterable<Integer> infiniteFib() {
+	public static Iterable<Integer> infiniteFib() {
 		int a = 1;
 		int b = 1;
 		for (;;) {
@@ -35,7 +35,7 @@ public class BasicExample {
 	// straightforward way
 
 	@GeneratorMethod
-	public <T> Iterable<T> filter(Iterable<T> source, Predicate<T> predicate) {
+	public static <T> Iterable<T> filter(Iterable<T> source, Predicate<T> predicate) {
 		for (T val : source) {
 			if (val != null && predicate.test(val)) {
 				yield(val);
@@ -45,7 +45,7 @@ public class BasicExample {
 	}
 
 	@GeneratorMethod
-	public <T> Iterable<T> take(Iterable<T> source, int n) {
+	public static <T> Iterable<T> take(Iterable<T> source, int n) {
 		int count = 0;
 		for (T val : source) {
 			if (count++ >= n) {
@@ -57,12 +57,11 @@ public class BasicExample {
 	}
 
 	public static void main(String[] args) {
-		BasicExample ex = new BasicExample();
-
+		
 		// the generator method can accept arguments.
-		ex.range(5, 10).forEach(System.out::println);
+		range(5, 10).forEach(System.out::println);
 
 		System.out.println("the first 10 even numbers in the fibonacci series: ");
-		ex.take(ex.filter(ex.infiniteFib(), x -> x % 2 == 0), 10).forEach(System.out::println);
+		take(filter(infiniteFib(), x -> x % 2 == 0), 10).forEach(System.out::println);
 	}
 }

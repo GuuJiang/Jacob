@@ -3,10 +3,9 @@ package com.guujiang.jacob.asm;
 import static org.objectweb.asm.Opcodes.*;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Type;
@@ -14,6 +13,7 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.IincInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -43,11 +43,14 @@ public class IteratorGenerator {
 
 	private Type[] arguments;
 
-	private Set<FieldNode> fields = new HashSet<>();
+	private List<FieldNode> fields = new LinkedList<>();
+
+	private boolean isStatic;
 
 	public IteratorGenerator(ClassNode outClassNode, MethodNode methodNode) {
 		this.outerClassNode = outClassNode;
 		this.methodNode = methodNode;
+		isStatic = (methodNode.access & ACC_STATIC) != 0;
 	}
 
 	public byte[] generate() throws AnalyzerException {
@@ -73,17 +76,22 @@ public class IteratorGenerator {
 
 		classNode = new ClassNode();
 		classNode.version = outerClassNode.version;
-		classNode.access = ACC_PUBLIC;
+		classNode.access = ACC_PRIVATE;
+		if (isStatic) {
+			classNode.access |= ACC_STATIC;
+		}
 		classNode.name = className;
 		classNode.superName = "java/lang/Object";
 		classNode.interfaces.add("java/util/Iterator");
 
 		classNode.outerClass = outerClassNode.name;
-		classNode.visitInnerClass(className, outerClassNode.name, methodNode.name + "$Iterator", ACC_PUBLIC);
+		classNode.visitInnerClass(className, outerClassNode.name, methodNode.name + "$Iterator", classNode.access);
 	}
 
 	private void generateField() {
-		classNode.fields.add(new FieldNode(ACC_FINAL | ACC_SYNTHETIC, "this$0", outerClassSignature, null, null));
+		if (!isStatic) {
+			classNode.fields.add(new FieldNode(ACC_FINAL | ACC_SYNTHETIC, "this$0", outerClassSignature, null, null));
+		}
 		classNode.fields.add(new FieldNode(ACC_PRIVATE, "state$", "I", null, null));
 		for (FieldNode field : fields) {
 			classNode.fields.add(field);
@@ -93,7 +101,9 @@ public class IteratorGenerator {
 	private void generateConstructor() {
 		StringBuilder methodDesc = new StringBuilder();
 		methodDesc.append('(');
-		methodDesc.append(outerClassSignature);
+		if (!isStatic) {
+			methodDesc.append(outerClassSignature);
+		}
 		for (Type t : arguments) {
 			methodDesc.append(t.getDescriptor());
 		}
@@ -102,28 +112,33 @@ public class IteratorGenerator {
 		InsnList insts = method.instructions;
 		LabelNode start = new LabelNode();
 		insts.add(start);
-		insts.add(new VarInsnNode(ALOAD, 0));
-		insts.add(new VarInsnNode(ALOAD, 1));
-		insts.add(new FieldInsnNode(PUTFIELD, className, "this$0", outerClassSignature));
+		if (!isStatic) {
+			insts.add(new VarInsnNode(ALOAD, 0));
+			insts.add(new VarInsnNode(ALOAD, 1));
+			insts.add(new FieldInsnNode(PUTFIELD, className, "this$0", outerClassSignature));
+		}
 		insts.add(new VarInsnNode(ALOAD, 0));
 		insts.add(new MethodInsnNode(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false));
+		
+		int offset = isStatic ? 1 : 2;
 		for (int i = 0; i < arguments.length; ++i) {
 			Type type = arguments[i];
 			FieldNode argField = new FieldNode(ACC_PRIVATE, "a" + i, type.getDescriptor(), null, null);
 			insts.add(new VarInsnNode(ALOAD, 0));
-			insts.add(new VarInsnNode(arguments[i].getOpcode(ILOAD), i + 2));
+			insts.add(new VarInsnNode(arguments[i].getOpcode(ILOAD), i + offset));
 			insts.add(new FieldInsnNode(PUTFIELD, className, argField.name, argField.desc));
-			
+
 			fields.add(argField);
 		}
 		insts.add(new InsnNode(RETURN));
 		LabelNode end = new LabelNode();
 		insts.add(end);
 
+		offset = isStatic ? 0 : 1;
 		method.localVariables.add(new LocalVariableNode("this", "L" + className + ";", null, start, end, 0));
 		for (int i = 0; i < arguments.length; ++i) {
-			LocalVariableNode var = methodNode.localVariables.get(i + 1);
-			method.localVariables.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + 2));
+			LocalVariableNode var = methodNode.localVariables.get(i + offset);
+			method.localVariables.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + offset + 1));
 		}
 
 		classNode.methods.add(method);
@@ -175,14 +190,26 @@ public class IteratorGenerator {
 
 			AbstractInsnNode ins = iter.next();
 			int opcode = ins.getOpcode();
-
 			if (ins instanceof VarInsnNode) {
 				VarInsnNode vins = (VarInsnNode) ins;
+				if (isStatic) {
+					vins.var += 1;
+					insts.add(vins);
+					continue;
+				}
 				if (vins.getOpcode() == ALOAD && vins.var == 0) {
 					insts.add(ins);
 					insts.add(new FieldInsnNode(GETFIELD, className, "this$0", outerClassSignature));
 					continue;
 				}
+			}
+			
+			if (ins instanceof IincInsnNode) {
+				if (isStatic) {
+					((IincInsnNode) ins).var += 1;
+				}
+				insts.add(ins);
+				continue;
 			}
 
 			if (ins instanceof MethodInsnNode && "yield".equals(((MethodInsnNode) ins).name)) {
@@ -218,11 +245,17 @@ public class IteratorGenerator {
 
 		insts.insert(start, transTable);
 
+		if (isStatic) {
+			method.localVariables.add(new LocalVariableNode("this", "L" + className + ";", null, start, end, 0));
+		}
 		for (LocalVariableNode var : methodNode.localVariables) {
 			if ("this".equals(var.name)) {
 				var.desc = "L" + className + ";";
 				var.start = start;
 				var.end = end;
+			}
+			if (isStatic) {
+				var.index += 1;
 			}
 			method.localVariables.add(var);
 		}
@@ -247,9 +280,11 @@ public class IteratorGenerator {
 
 		String fieldPrefix = "l" + exits.size();
 
+		int localStart = isStatic ? 0 : 1;
+		int offset = isStatic ? 1 : 0;
 		List<FieldNode> fieldNodes = new ArrayList<>();
 		if (frame != null) {
-			for (int i = 1; i < frame.getLocals(); ++i) {
+			for (int i = localStart; i < frame.getLocals(); ++i) {
 				FullValue local = frame.getLocal(i);
 				if (local == FullValue.UNINITIALIZED_VALUE) {
 					break;
@@ -257,7 +292,7 @@ public class IteratorGenerator {
 				FieldNode field = new FieldNode(ACC_PRIVATE, fieldPrefix + i, local.getType().getDescriptor(), null,
 						null);
 				insts.add(new VarInsnNode(ALOAD, 0));
-				insts.add(new VarInsnNode(local.getType().getOpcode(ILOAD), i));
+				insts.add(new VarInsnNode(local.getType().getOpcode(ILOAD), i + offset));
 				insts.add(new FieldInsnNode(PUTFIELD, className, field.name, field.desc));
 
 				fieldNodes.add(field);
@@ -266,15 +301,15 @@ public class IteratorGenerator {
 		insts.add(new InsnNode(ARETURN));
 		insts.add(exit);
 		if (frame != null) {
-			for (int i = 1; i < frame.getLocals(); ++i) {
+			for (int i = localStart; i < frame.getLocals(); ++i) {
 				FullValue local = frame.getLocal(i);
 				if (local == FullValue.UNINITIALIZED_VALUE) {
 					break;
 				}
-				FieldNode field = fieldNodes.get(i - 1);
+				FieldNode field = fieldNodes.get(i - localStart);
 				insts.add(new VarInsnNode(ALOAD, 0));
 				insts.add(new FieldInsnNode(GETFIELD, className, field.name, field.desc));
-				insts.add(new VarInsnNode(local.getType().getOpcode(ISTORE), i));
+				insts.add(new VarInsnNode(local.getType().getOpcode(ISTORE), i + offset));
 			}
 		}
 

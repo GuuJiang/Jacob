@@ -24,10 +24,13 @@ public class MethodTransformer {
 	private ClassNode outerClassNode;
 	private MethodNode methodNode;
 
+	private boolean isStatic;
+
 	public MethodTransformer(ClassLoader loader, ClassNode outerClassNode, MethodNode methodNode) {
 		this.loader = loader;
 		this.outerClassNode = outerClassNode;
 		this.methodNode = methodNode;
+		isStatic = (methodNode.access & ACC_STATIC) != 0;
 	}
 
 	public void transform() throws AnalyzerException {
@@ -46,14 +49,22 @@ public class MethodTransformer {
 
 		insts.add(new TypeInsnNode(NEW, iterableClassName));
 		insts.add(new InsnNode(DUP));
-		insts.add(new VarInsnNode(ALOAD, 0));
+		
+		int offset = 0;
+		if (!isStatic) {
+			insts.add(new VarInsnNode(ALOAD, 0));
+			offset = 1;
+		}
 		for (int i = 0; i < arguments.length; ++i) {
-			insts.add(new VarInsnNode(arguments[i].getOpcode(ILOAD), i + 1));
+			insts.add(new VarInsnNode(arguments[i].getOpcode(ILOAD), i + offset));
 		}
 		StringBuilder desc = new StringBuilder();
-		desc.append("(L");
-		desc.append(outerClassNode.name);
-		desc.append(';');
+		desc.append("(");
+		if (!isStatic) {
+			desc.append('L');
+			desc.append(outerClassNode.name);
+			desc.append(';');
+		}
 		for (Type t : arguments) {
 			desc.append(t.getDescriptor());
 		}
@@ -66,11 +77,13 @@ public class MethodTransformer {
 
 		List<LocalVariableNode> args = new ArrayList<>(methodNode.localVariables);
 		methodNode.localVariables.clear();
-		methodNode.localVariables
-				.add(new LocalVariableNode("this", "L" + outerClassNode.name + ";", null, start, end, 0));
+		if (!isStatic) {
+			methodNode.localVariables
+					.add(new LocalVariableNode("this", "L" + outerClassNode.name + ";", null, start, end, 0));
+		}
 		for (int i = 0; i < arguments.length; ++i) {
-			LocalVariableNode var = args.get(i + 1);
-			methodNode.localVariables.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + 2));
+			LocalVariableNode var = args.get(i + offset);
+			methodNode.localVariables.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + offset));
 		}
 	}
 
