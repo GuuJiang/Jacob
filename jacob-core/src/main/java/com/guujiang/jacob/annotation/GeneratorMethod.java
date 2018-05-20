@@ -19,5 +19,5 @@ import com.guujiang.jacob.Stub;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface GeneratorMethod {
-
+	public OverRangePolicy overIterate() default OverRangePolicy.ReturnNull;
 }

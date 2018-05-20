@@ -6,11 +6,12 @@ import java.util.function.Predicate;
 
 import com.guujiang.jacob.annotation.Generator;
 import com.guujiang.jacob.annotation.GeneratorMethod;
+import com.guujiang.jacob.annotation.OverRangePolicy;
 
 @Generator
 public class BasicExample {
 
-	@GeneratorMethod
+	@GeneratorMethod(overIterate=OverRangePolicy.PreFetch)
 	public static Iterable<Integer> range(int start, int end) {
 		for (int i = start; i < end; ++i) {
 			yield(i);
@@ -34,17 +35,17 @@ public class BasicExample {
 	// with the coroutine syntax, many functional method can by implemented in a
 	// straightforward way
 
-	@GeneratorMethod
+	@GeneratorMethod(overIterate=OverRangePolicy.PreFetch)
 	public static <T> Iterable<T> filter(Iterable<T> source, Predicate<T> predicate) {
 		for (T val : source) {
-			if (val != null && predicate.test(val)) {
+			if (predicate.test(val)) {
 				yield(val);
 			}
 		}
 		return null;
 	}
 
-	@GeneratorMethod
+	@GeneratorMethod(overIterate=OverRangePolicy.PreFetch)
 	public static <T> Iterable<T> take(Iterable<T> source, int n) {
 		int count = 0;
 		for (T val : source) {
