@@ -2,9 +2,6 @@ package com.guujiang.jacob.asm;
 
 import static org.objectweb.asm.Opcodes.*;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -32,6 +29,7 @@ import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
 import org.objectweb.asm.tree.analysis.Frame;
 
+import com.guujiang.jacob.agent.IntermediateClassProcessor;
 import com.guujiang.jacob.annotation.GeneratorMethod;
 import com.guujiang.jacob.annotation.OverRangePolicy;
 import com.guujiang.jacob.asm.analyze.FullInterpreter;
@@ -48,7 +46,8 @@ public class IteratorGenerator {
 	private String className;
 	private ClassNode classNode;
 
-	private Type[] arguments;
+	private Type[] argumentTypes;
+	private LocalVariableNode[] arguments;
 
 	private List<FieldNode> fields = new LinkedList<>();
 
@@ -75,10 +74,19 @@ public class IteratorGenerator {
 		}
 	}
 
-	public byte[] generate() throws AnalyzerException {
-
+	public void generate(IntermediateClassProcessor processor) throws AnalyzerException {
 		exits = new ArrayList<>();
-		arguments = Type.getArgumentTypes(methodNode.desc);
+		argumentTypes = Type.getArgumentTypes(methodNode.desc);
+		arguments = new LocalVariableNode[argumentTypes.length];
+		
+		LabelNode start = (LabelNode) methodNode.instructions.get(0);
+		int offset = isStatic ? 0 : 1;
+		for (LocalVariableNode var : methodNode.localVariables) {
+			int idx = var.index - offset;
+			if (var.start == start && idx >= 0 && idx < arguments.length) {
+				arguments[idx] = var;
+			}
+		}
 
 		generateClass();
 		generateConstructor();
@@ -88,8 +96,8 @@ public class IteratorGenerator {
 
 		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
 		classNode.accept(cw);
-
-		return cw.toByteArray();
+		
+		processor.process(className, cw.toByteArray());
 	}
 
 	private void generateClass() {
@@ -126,7 +134,7 @@ public class IteratorGenerator {
 		if (!isStatic) {
 			methodDesc.append(outerClassSignature);
 		}
-		for (Type t : arguments) {
+		for (Type t : argumentTypes) {
 			methodDesc.append(t.getDescriptor());
 		}
 		methodDesc.append(")V");
@@ -143,11 +151,11 @@ public class IteratorGenerator {
 		insts.add(new MethodInsnNode(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false));
 
 		int offset = isStatic ? 1 : 2;
-		for (int i = 0; i < arguments.length; ++i) {
-			Type type = arguments[i];
+		for (int i = 0; i < argumentTypes.length; ++i) {
+			Type type = argumentTypes[i];
 			FieldNode argField = new FieldNode(ACC_PRIVATE, "a" + i, type.getDescriptor(), null, null);
 			insts.add(new VarInsnNode(ALOAD, 0));
-			insts.add(new VarInsnNode(arguments[i].getOpcode(ILOAD), i + offset));
+			insts.add(new VarInsnNode(argumentTypes[i].getOpcode(ILOAD), i + offset));
 			insts.add(new FieldInsnNode(PUTFIELD, className, argField.name, argField.desc));
 
 			fields.add(argField);
@@ -158,8 +166,8 @@ public class IteratorGenerator {
 
 		offset = isStatic ? 0 : 1;
 		method.localVariables.add(new LocalVariableNode("this", "L" + className + ";", null, start, end, 0));
-		for (int i = 0; i < arguments.length; ++i) {
-			LocalVariableNode var = methodNode.localVariables.get(i + offset);
+		for (int i = 0; i < argumentTypes.length; ++i) {
+			LocalVariableNode var = arguments[i];
 			method.localVariables
 					.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + offset + 1));
 		}
@@ -221,8 +229,8 @@ public class IteratorGenerator {
 		LabelNode start = new LabelNode();
 		insts.add(start);
 
-		for (int i = 0; i < arguments.length; ++i) {
-			Type type = arguments[i];
+		for (int i = 0; i < argumentTypes.length; ++i) {
+			Type type = argumentTypes[i];
 			insts.add(new VarInsnNode(ALOAD, 0));
 			insts.add(new FieldInsnNode(GETFIELD, className, "a" + i, type.getDescriptor()));
 			insts.add(new VarInsnNode(type.getOpcode(ISTORE), i + 1));
@@ -302,17 +310,6 @@ public class IteratorGenerator {
 
 		if (isStatic) {
 			method.localVariables.add(new LocalVariableNode("this", "L" + className + ";", null, start, end, 0));
-		}
-		for (LocalVariableNode var : methodNode.localVariables) {
-			if ("this".equals(var.name)) {
-				var.desc = "L" + className + ";";
-				var.start = start;
-				var.end = end;
-			}
-			if (isStatic) {
-				var.index += 1;
-			}
-			method.localVariables.add(var);
 		}
 	}
 

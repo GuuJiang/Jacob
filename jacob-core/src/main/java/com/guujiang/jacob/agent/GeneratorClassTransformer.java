@@ -2,6 +2,7 @@ package com.guujiang.jacob.agent;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
+import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 
 import org.objectweb.asm.ClassReader;
@@ -30,11 +31,11 @@ public class GeneratorClassTransformer implements ClassFileTransformer {
 		}
 
 		boolean transformed = false;
-		
+
 		try {
 			for (MethodNode method : clsNode.methods) {
 				if (checkMethod(method)) {
-					new MethodTransformer(loader, clsNode, method).transform();
+					new MethodTransformer(clsNode, method, new LoadClassProcessor(loader)).transform();
 					transformed = true;
 				}
 			}
@@ -73,4 +74,29 @@ public class GeneratorClassTransformer implements ClassFileTransformer {
 		}
 		return false;
 	}
+
+	class LoadClassProcessor implements IntermediateClassProcessor {
+		private ClassLoader loader;
+
+		public LoadClassProcessor(ClassLoader loader) {
+			this.loader = loader;
+		}
+
+		@Override
+		public void process(String className, byte[] bytes) {
+			loadClass(bytes);
+		}
+
+		private void loadClass(byte[] bytes) {
+			try {
+				Method m = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class,
+						int.class);
+				m.setAccessible(true);
+				m.invoke(loader, null, bytes, 0, bytes.length);
+			} catch (Exception e) {
+				throw new RuntimeException("Failed to load class with reflect", e);
+			}
+		}
+	}
+
 }

@@ -2,7 +2,6 @@ package com.guujiang.jacob.asm;
 
 import static org.objectweb.asm.Opcodes.*;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,24 +17,26 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
 
+import com.guujiang.jacob.agent.IntermediateClassProcessor;
+
 public class MethodTransformer {
 
-	private ClassLoader loader;
 	private ClassNode outerClassNode;
 	private MethodNode methodNode;
+	private IntermediateClassProcessor processor;
 
 	private boolean isStatic;
 
-	public MethodTransformer(ClassLoader loader, ClassNode outerClassNode, MethodNode methodNode) {
-		this.loader = loader;
+	public MethodTransformer(ClassNode outerClassNode, MethodNode methodNode, IntermediateClassProcessor processor) {
 		this.outerClassNode = outerClassNode;
 		this.methodNode = methodNode;
+		this.processor = processor;
 		isStatic = (methodNode.access & ACC_STATIC) != 0;
 	}
 
 	public void transform() throws AnalyzerException {
-		loadClass(new IteratorGenerator(outerClassNode, methodNode).generate());
-		loadClass(new IterableGenerator(outerClassNode, methodNode).generate());
+		new IteratorGenerator(outerClassNode, methodNode).generate(processor);
+		new IterableGenerator(outerClassNode, methodNode).generate(processor);
 
 		String iterableClassName = outerClassNode.name + "$" + methodNode.name + "$Iterable";
 
@@ -49,7 +50,7 @@ public class MethodTransformer {
 
 		insts.add(new TypeInsnNode(NEW, iterableClassName));
 		insts.add(new InsnNode(DUP));
-		
+
 		int offset = 0;
 		if (!isStatic) {
 			insts.add(new VarInsnNode(ALOAD, 0));
@@ -83,18 +84,8 @@ public class MethodTransformer {
 		}
 		for (int i = 0; i < arguments.length; ++i) {
 			LocalVariableNode var = args.get(i + offset);
-			methodNode.localVariables.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + offset));
-		}
-	}
-
-	private void loadClass(byte[] bytes) {
-		try {
-			Method m = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class,
-					int.class);
-			m.setAccessible(true);
-			m.invoke(loader, null, bytes, 0, bytes.length);
-		} catch (Exception e) {
-			throw new RuntimeException("Failed to load class with reflect", e);
+			methodNode.localVariables
+					.add(new LocalVariableNode(var.name, var.desc, var.signature, start, end, i + offset));
 		}
 	}
 
