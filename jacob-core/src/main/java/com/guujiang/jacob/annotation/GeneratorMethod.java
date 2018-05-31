@@ -8,11 +8,13 @@ import java.lang.annotation.Target;
 import com.guujiang.jacob.Stub;
 
 /**
- * Indicate that a generator method.<br />
+ * Indicate that a generator method.
  * A method can be generator method if and only if <b>ALL</b> the conditions below holds.
- * <li>return type is {@link java.lang.Iterable}</li>
- * <li>invoked {@link Stub#yield(Object) yield} at least once</li>
- * <li>has at most one return statement at the end</li>
+ * <ul>
+ * 	<li>return type is {@link java.lang.Iterable}</li>
+ * 	<li>invoked {@link Stub#yield(Object) yield} at least once</li>
+ * 	<li>has at most one return statement at the end</li>
+ * </ul>
  * @author GuuJiang
  *
  */
